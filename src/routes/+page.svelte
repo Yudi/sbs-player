@@ -1,206 +1,209 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 
+	let subtitlesTrack: HTMLTrackElement;
+
+	let playerLeft: HTMLVideoElement;
+	let playerRight: HTMLVideoElement;
+
+	let leftDropzoneUploaded: boolean = false;
+	let rightDropzoneUploaded: boolean = false;
+	let subtitlesDropzoneUploaded: boolean = false;
+	let videoPlayed: boolean = false;
+
+	let dropzoneLeft: HTMLDivElement;
+	let dropzoneRight: HTMLDivElement;
+	let dropzoneSubtitles: HTMLDivElement;
+
+	let inputLeft: HTMLInputElement;
+	let inputRight: HTMLInputElement;
+	let inputSubtitles: HTMLInputElement;
+
+	let subtitleText: string = '';
+
 	onMount(() => {
-		// @ts-ignore
-		window.SUPPORTS_SKIP_SILENCE_SHADOW_PLAYER = true;
-
-		const playSelectedFile = (file: File, subtitle: File) => {
-			const videoNode = document.getElementById('player') as HTMLVideoElement;
-			const subtitleTrack = document.getElementById('subtrack') as HTMLTrackElement;
-			const fileURL = window.URL.createObjectURL(file);
-			const subtitleURL = window.URL.createObjectURL(subtitle);
-
-			if (!videoNode) {
-				throw new Error('No video node found');
-			}
-
-			if (!subtitleTrack) {
-				throw new Error('No subtitle track found');
-			}
-
-			videoNode.src = fileURL;
-			subtitleTrack.src = subtitleURL;
-
-			document.querySelector('.selection')?.classList.add('hidden');
-			document.querySelector('#player')?.classList.remove('hidden');
-			document.querySelector('.activate-info')?.classList.remove('hidden');
-
-			const dragInfo = document.querySelector('.drag-info') as HTMLElement;
-			dragInfo.style.display = 'none';
-		};
-
-		// Handle selecting a new file
-		const inputNode = document.getElementById('input') as HTMLInputElement;
-		if (!inputNode) {
-			throw new Error('No input node found');
+		// Dropzones
+		function handleDrop(e: DragEvent, dropzone: HTMLDivElement, side: string) {
+			e.preventDefault();
+			dropzone.classList.remove('opacity-50');
+			fileDrop(e, side);
 		}
 
-		inputNode.addEventListener(
-			'change',
-			(evt) => {
-				const input = evt.target as HTMLInputElement;
-				if (input.files) {
-					const files = Array.from(input.files);
-					const videoFile = files.find((file) => file.type.startsWith('video/'));
-					const subtitleFile = files.find((file) => file.type.startsWith('text/'));
-					if (!videoFile) {
-						throw new Error('No video file found');
-					}
-					if (!subtitleFile) {
-						throw new Error('No subtitle file found');
-					}
+		function handleDragOver(e: DragEvent, dropzone: HTMLDivElement) {
+			e.preventDefault();
+			dropzone.classList.add('opacity-50');
+		}
 
-					playSelectedFile(videoFile, subtitleFile);
-				}
-			},
-			false
+		function handleDragLeave(e: DragEvent, dropzone: HTMLDivElement) {
+			e.preventDefault();
+			dropzone.classList.remove('opacity-50');
+		}
+
+		// Left dropzone
+		dropzoneLeft.addEventListener('drop', (e) => handleDrop(e, dropzoneLeft, 'left'));
+		dropzoneLeft.addEventListener('dragover', (e) => handleDragOver(e, dropzoneLeft));
+		dropzoneLeft.addEventListener('dragleave', (e) => handleDragLeave(e, dropzoneLeft));
+
+		// Right dropzone
+		dropzoneRight.addEventListener('drop', (e) => handleDrop(e, dropzoneRight, 'right'));
+		dropzoneRight.addEventListener('dragover', (e) => handleDragOver(e, dropzoneRight));
+		dropzoneRight.addEventListener('dragleave', (e) => handleDragLeave(e, dropzoneRight));
+
+		// Subtitles dropzone
+		dropzoneSubtitles.addEventListener('drop', (e) =>
+			handleDrop(e, dropzoneSubtitles, 'subtitles')
 		);
+		dropzoneSubtitles.addEventListener('dragover', (e) => handleDragOver(e, dropzoneSubtitles));
+		dropzoneSubtitles.addEventListener('dragleave', (e) => handleDragLeave(e, dropzoneSubtitles));
 
-		// // Handle Drag and Drop of files over the page
-		// document.body.addEventListener('dragover', (ev) => {
-		// 	ev.preventDefault();
-		// 	(document.querySelector('.drag-info') as HTMLElement).style.display = 'flex';
-		// });
-		// document.body.addEventListener('dragexit', () => {
-		// 	(document.querySelector('.drag-info') as HTMLElement).style.display = 'none';
-		// });
-		// document.body.addEventListener('drop', (ev) => {
-		// 	console.log('File(s) dropped');
+		// Inputs
+		function handleInputChange(e: Event, side: string) {
+			const input = e.target as HTMLInputElement;
+			if (input.files) {
+				const file = input.files[0];
+				loadVideo(file, side);
+			}
+		}
 
-		// 	// Prevent default behavior (Prevent file from being opened)
-		// 	ev.preventDefault();
-		// 	if (!ev.dataTransfer) {
-		// 		throw new Error('No data transfer found');
-		// 	}
-
-		// 	if (ev.dataTransfer.items) {
-		// 		// Use DataTransferItemList interface to access the file(s)
-		// 		for (var i = 0; i < ev.dataTransfer.items.length; i++) {
-		// 			// If dropped items aren't files, reject them
-		// 			if (ev.dataTransfer.items[i].kind === 'file') {
-		// 				var file = ev.dataTransfer.items[i].getAsFile();
-
-		// 				playSelectedFile(file);
-		// 				return;
-		// 			}
-		// 		}
-		// 	} else {
-		// 		// Use DataTransfer interface to access the file(s)
-
-		// 		for (var i = 0; i < ev.dataTransfer.files.length; i++) {
-		// 			playSelectedFile(ev.dataTransfer.files[i]);
-		// 			return;
-		// 		}
-		// 	}
-		// });
+		inputLeft.addEventListener('change', (e) => handleInputChange(e, 'left'));
+		inputRight.addEventListener('change', (e) => handleInputChange(e, 'right'));
+		inputSubtitles.addEventListener('change', (e) => handleInputChange(e, 'subtitles'));
 	});
+
+	function fileDrop(e: DragEvent, side: string) {
+		if (e.dataTransfer?.items) {
+			// If dropped items aren't files, reject them
+			if (e.dataTransfer.items[0].kind === 'file') {
+				let file = e.dataTransfer.items[0].getAsFile();
+				if (!file) {
+					throw new Error('No file found');
+				}
+
+				if (side === 'subtitles') {
+					loadSubtitles(file);
+				} else {
+					loadVideo(file, side);
+				}
+
+				return;
+			}
+		}
+	}
+
+	function loadSubtitles(file: File) {
+		const url = URL.createObjectURL(file);
+		subtitlesTrack.src = url;
+		subtitlesDropzoneUploaded = true;
+
+		subtitlesTrack.track.oncuechange = (e) => {
+			const cues = Array.from(subtitlesTrack.track.activeCues || []);
+			//@ts-ignore
+			const texts = cues ? [...cues].map((cue) => cue.text) : [];
+			subtitleText = texts.join('\n');
+		};
+	}
+
+	function loadVideo(file: File, side: string) {
+		const url = URL.createObjectURL(file);
+		let player: HTMLVideoElement | undefined;
+
+		switch (side) {
+			case 'left':
+				player = playerLeft;
+				leftDropzoneUploaded = true;
+
+				playerLeft.addEventListener('play', () => {
+					videoPlayed = true;
+					if (playerRight) {
+						playerRight.play();
+						playerRight.currentTime = playerLeft.currentTime;
+					}
+				});
+
+				playerLeft.addEventListener('pause', () => {
+					if (playerRight) {
+						playerRight.pause();
+					}
+				});
+
+				playerLeft.addEventListener('seeked', () => {
+					if (playerRight) {
+						playerRight.currentTime = playerLeft.currentTime;
+					}
+				});
+
+				break;
+			case 'right':
+				player = playerRight;
+				rightDropzoneUploaded = true;
+				break;
+		}
+
+		if (!player) {
+			throw new Error('No player found');
+		}
+
+		player.src = url;
+		player.load();
+		player.classList.remove('hidden');
+	}
 </script>
 
-<div class="activate-info hidden">
-	<!-- <img src="arrow.svg" alt="Arrow" /> -->
-	<p>You can now activate "Skip Silence"</p>
-</div>
+<div class="grid grid-cols-2 items-center">
+	<div
+		class="width-full video-player flex items-center justify-center"
+		class:border-r-2={!videoPlayed}
+		bind:this={dropzoneLeft}
+	>
+		{#if leftDropzoneUploaded === false}
+			<label
+				class="mb-2 me-2 rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:border-gray-600 dark:hover:bg-gray-700 dark:focus:ring-gray-700"
+			>
+				Upload left video
+				<input type="file" id="left-form" bind:this={inputLeft} class="hidden" />
+			</label>
+		{/if}
+		<video controls bind:this={playerLeft} class="hidden">
+			<track kind="metadata" default bind:this={subtitlesTrack} />
+		</video>
+	</div>
 
-<div class="drag-info hidden">
-	<p>Drop your video to play it</p>
-</div>
-
-<div class="selection">
-	<h1>Skip Silence Video Player</h1>
-	<p>
-		This player allows you to use the <a
-			href="https://chrome.google.com/webstore/detail/skip-silence/fhdmkhbefcbhakffdihhceaklaigdllh"
-			>"Skip Silence" extension</a
-		> in combination with local files.
-	</p>
-	<p>Simply choose the video you want to watch, then activate "Skip Silence" as normal.</p>
-
-	<div class="file">
-		<label class="fileContainer">
-			Choose a video
-			<input type="file" accept="video/*, .vtt" id="input" multiple />
-		</label>
+	<div class="width-full video-player flex items-center justify-center" bind:this={dropzoneRight}>
+		{#if rightDropzoneUploaded === false}
+			<label
+				class="mb-2 me-2 rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:border-gray-600 dark:hover:bg-gray-700 dark:focus:ring-gray-700"
+			>
+				Upload right video
+				<input type="file" id="right-form" bind:this={inputRight} class="hidden" />
+			</label>
+		{/if}
+		<video bind:this={playerRight} muted class="hidden" />
 	</div>
 </div>
-<video controls autoplay id="player" class="hidden">
-	<track label="Portuguese" kind="subtitles" srclang="pt" id="subtrack" default />
-</video>
+
+<div
+	class="width-full subtitles flex items-center justify-center"
+	class:border-t-2={!videoPlayed}
+	bind:this={dropzoneSubtitles}
+>
+	{#if subtitlesDropzoneUploaded === false}
+		<label
+			class="mb-2 me-2 rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:border-gray-600 dark:hover:bg-gray-700 dark:focus:ring-gray-700"
+		>
+			Upload subtitles
+			<input type="file" id="subtitles-form" bind:this={inputSubtitles} class="hidden" />
+		</label>
+	{/if}
+	{#if subtitlesTrack?.track}
+		<p class="bg-black/50 p-2 text-3xl">{subtitleText}</p>
+	{/if}
+</div>
 
 <style>
-	a {
-		color: #d1d1d1;
+	.video-player {
+		height: 85vh;
 	}
-
-	.hidden {
-		display: none;
-	}
-
-	.activate-info {
-		position: absolute;
-		top: 0;
-		right: 0;
-
-		animation-name: fadeInOut;
-		animation-duration: 4s;
-		animation-fill-mode: forwards;
-
-		background-color: rgba(0, 0, 0, 0.8);
-		padding: 1em 6em;
-
-		opacity: 0;
-	}
-
-	.drag-info {
-		position: absolute;
-		top: 0;
-		left: 0;
-
-		background-color: rgba(0, 0, 0, 0.8);
-		width: 100%;
-		height: 100%;
-
-		justify-content: center;
-		align-items: center;
-	}
-
-	@keyframes fadeInOut {
-		0% {
-			opacity: 0;
-			display: inline;
-		}
-		50% {
-			opacity: 1;
-			display: inline;
-		}
-		99% {
-			opacity: 0;
-			display: inline;
-		}
-		100% {
-			display: none;
-		}
-	}
-
-	.file {
-		margin-top: 2em;
-	}
-
-	.fileContainer {
-		overflow: hidden;
-		background: #ebebeb;
-		border-radius: 2em;
-		padding: 1em 2em;
-		color: #212121;
-		cursor: pointer;
-	}
-
-	.fileContainer [type='file'] {
-		display: none;
-	}
-
-	#player {
-		height: 100%;
-		width: 100%;
+	.subtitles {
+		height: 15vh;
 	}
 </style>
