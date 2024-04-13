@@ -5,7 +5,7 @@
 Once you've created a project and installed dependencies with `bun install`, start a development server:
 
 ```bash
-bun dev
+bun run dev
 ```
 
 ## Building
@@ -13,7 +13,7 @@ bun dev
 To create a production version of your app:
 
 ```bash
-bun build
+bun run build
 ```
 
 You can preview the production build with `bun preview`.
